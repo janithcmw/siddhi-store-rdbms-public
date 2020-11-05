@@ -144,10 +144,10 @@ public class RDBMSStreamProcessorUtil {
     public static boolean queryContainsCheck(boolean isRetrievalQuery, String query) {
         if (isRetrievalQuery) {
             return Arrays.stream(RDBMSStreamProcessorUtil.MANIPULATION_OPERATIONS)
-                    .parallel().anyMatch(query.toUpperCase(Locale.getDefault())::contains);
+                    .parallel().anyMatch(query.toUpperCase(Locale.getDefault()).substring(0, 6)::contains);
         } else {
             return Arrays.stream(RDBMSStreamProcessorUtil.OPERATIONS)
-                    .parallel().anyMatch(query.toUpperCase(Locale.getDefault())::contains);
+                    .parallel().anyMatch(query.toUpperCase(Locale.getDefault()).substring(0, 6)::contains);
         }
     }
 

@@ -99,7 +99,7 @@ insert into  RecordStream;
 
 <span id="syntax" class="md-typeset" style="display: block; font-weight: bold;">Syntax</span>
 ```
-rdbms:query(<STRING> datasource.name, <STRING> query, <STRING> parameter.n, <STRING> attribute.definition.list)
+rdbms:query(<STRING> datasource.name, <STRING> query, <STRING> parameter.n, <STRING> attribute.definition.list, <BOOL> ack.empty.result.set)
 ```
 
 <span id="query-parameters" class="md-typeset" style="display: block; color: rgba(0, 0, 0, 0.54); font-size: 12.8px; font-weight: bold;">QUERY PARAMETERS</span>
@@ -141,6 +141,14 @@ rdbms:query(<STRING> datasource.name, <STRING> query, <STRING> parameter.n, <STR
         <td style="vertical-align: top; word-wrap: break-word">This is provided as a comma-separated list in the '&lt;AttributeName AttributeType&gt;' format. The SQL query is expected to return the attributes in the given order. e.g., If one attribute is defined here, the SQL query should return one column result set. If more than one column is returned, then the first column is processed. The Siddhi data types supported are 'STRING', 'INT', 'LONG', 'DOUBLE', 'FLOAT', and 'BOOL'. <br>&nbsp;Mapping of the Siddhi data type to the database data type can be done as follows, <br>*Siddhi Datatype*-&gt;*Datasource Datatype*<br><code>STRING</code>-&gt;<code>CHAR</code>,<code>VARCHAR</code>,<code>LONGVARCHAR</code><br><code>INT</code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&gt;<code>INTEGER</code><br><code>LONG</code>&nbsp;&nbsp;&nbsp;&nbsp;-&gt;<code>BIGINT</code><br><code>DOUBLE</code>-&gt;<code>DOUBLE</code><br><code>FLOAT</code>&nbsp;&nbsp;&nbsp;-&gt;<code>REAL</code><br><code>BOOL</code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&gt;<code>BIT</code><br></td>
         <td style="vertical-align: top"></td>
         <td style="vertical-align: top">STRING</td>
+        <td style="vertical-align: top">No</td>
+        <td style="vertical-align: top">No</td>
+    </tr>
+    <tr>
+        <td style="vertical-align: top">ack.empty.result.set</td>
+        <td style="vertical-align: top; word-wrap: break-word">When the parameter is set to <code>true</code>, the return attributes will contain <code>null</code> values if the result set is empty. <br>If the parameter is set to <code>false</code>, the function wont return any attributes.</td>
+        <td style="vertical-align: top">false</td>
+        <td style="vertical-align: top">BOOL</td>
         <td style="vertical-align: top">No</td>
         <td style="vertical-align: top">No</td>
     </tr>

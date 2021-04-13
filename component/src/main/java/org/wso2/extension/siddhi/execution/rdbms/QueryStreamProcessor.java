@@ -94,6 +94,14 @@ import java.util.stream.Collectors;
                                 "`FLOAT`&nbsp;&nbsp;&nbsp;->`REAL`\n" +
                                 "`BOOL`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;->`BIT`\n",
                         type = DataType.STRING
+                ),
+                @Parameter(
+                        name = "ack.empty.result.set",
+                        description = "When the parameter is set to `true`, the return attributes will contain " +
+                                "`null` values if the result set is empty. \n" +
+                                "If the parameter is set to `false`, the function wont return any attributes.",
+                        type = DataType.BOOL,
+                        defaultValue = "false"
                 )
         },
         returnAttributes = {
@@ -138,6 +146,7 @@ public class QueryStreamProcessor extends StreamProcessor {
     private ExpressionExecutor queryExpressionExecutor;
     private List<Attribute> attributeList = new ArrayList<>();
     private boolean isVaryingQuery;
+    private boolean ackEmptyResultSet;
     private List<ExpressionExecutor> expressionExecutors = new ArrayList<>();
 
     @Override
@@ -147,7 +156,7 @@ public class QueryStreamProcessor extends StreamProcessor {
 
         int attributesLength = attributeExpressionExecutors.length;
         if ((attributesLength < 3)) {
-            throw new SiddhiAppValidationException("rdbms query function  should have at least 3 parameters , " +
+            throw new SiddhiAppValidationException("rdbms query function should have at least 4 parameters , " +
                     "but found '" + attributesLength + "' parameters.");
         }
 
@@ -161,31 +170,71 @@ public class QueryStreamProcessor extends StreamProcessor {
                     attributeExpressionExecutors[1].getReturnType() + "'.");
         }
 
+        ExpressionExecutor ackEmptyResultSetAttributeExpressionExecutor =
+                attributeExpressionExecutors[attributesLength - 1];
         ExpressionExecutor streamDefExecutor;
-        if (attributesLength == 3) {
-            streamDefExecutor = attributeExpressionExecutors[2];
-            this.isVaryingQuery = false;
+        if ((ackEmptyResultSetAttributeExpressionExecutor instanceof ConstantExpressionExecutor)) {
+            try {
+                ackEmptyResultSet =
+                        (Boolean) ((ConstantExpressionExecutor) ackEmptyResultSetAttributeExpressionExecutor)
+                                .getValue();
+                if (attributesLength == 4) {
+                    streamDefExecutor = attributeExpressionExecutors[2];
+                    this.isVaryingQuery = false;
+                } else {
+                    this.isVaryingQuery = true;
+                    //Process the query conditions through stream attributes
+                    long attributeCount;
+                    if (queryExpressionExecutor instanceof ConstantExpressionExecutor) {
+                        String query = ((ConstantExpressionExecutor) queryExpressionExecutor).getValue().toString();
+                        attributeCount = query.chars().filter(ch -> ch == '?').count();
+                    } else {
+                        throw new SiddhiAppValidationException("The parameter 'query' in rdbms query " +
+                                "function should be a constant, but found a parameter of instance '" +
+                                attributeExpressionExecutors[2].getClass().getName() + "'.");
+                    }
+                    if (attributeCount == attributesLength - 4) {
+                        this.expressionExecutors.addAll(
+                                Arrays.asList(attributeExpressionExecutors).subList(2, attributesLength - 2));
+                    } else {
+                        throw new SiddhiAppValidationException("The parameter 'query' in rdbms query " +
+                                "function contains '" + attributeCount +
+                                "' ordinals, but found siddhi attributes of count '" +
+                                (attributesLength - 4) + "'.");
+                    }
+                    streamDefExecutor = attributeExpressionExecutors[attributesLength - 2];
+                }
+            } catch (ClassCastException e) {
+                if (attributesLength == 3) {
+                    streamDefExecutor = attributeExpressionExecutors[2];
+                    this.isVaryingQuery = false;
+                } else {
+                    this.isVaryingQuery = true;
+                    //Process the query conditions through stream attributes
+                    long attributeCount;
+                    if (queryExpressionExecutor instanceof ConstantExpressionExecutor) {
+                        String query = ((ConstantExpressionExecutor) queryExpressionExecutor).getValue().toString();
+                        attributeCount = query.chars().filter(ch -> ch == '?').count();
+                    } else {
+                        throw new SiddhiAppValidationException("The parameter 'query' in rdbms query " +
+                                "function should be a constant, but found a parameter of instance '" +
+                                attributeExpressionExecutors[1].getClass().getName() + "'.");
+                    }
+                    if (attributeCount == attributesLength - 3) {
+                        this.expressionExecutors.addAll(
+                                Arrays.asList(attributeExpressionExecutors).subList(2, attributesLength - 1));
+                    } else {
+                        throw new SiddhiAppValidationException("The parameter 'query' in rdbms query " +
+                                "function contains '" + attributeCount +
+                                "' ordinals, but found siddhi attributes of count '" +
+                                (attributesLength - 3) + "'.");
+                    }
+                    streamDefExecutor = attributeExpressionExecutors[attributesLength - 1];
+                }
+            }
         } else {
-            this.isVaryingQuery = true;
-            //Process the query conditions through stream attributes
-            long attributeCount;
-            if (queryExpressionExecutor instanceof ConstantExpressionExecutor) {
-                String query = ((ConstantExpressionExecutor) queryExpressionExecutor).getValue().toString();
-                attributeCount = query.chars().filter(ch -> ch == '?').count();
-            } else {
-                throw new SiddhiAppValidationException("The parameter 'query' in rdbms query " +
-                        "function should be a constant, but found a parameter of instance '" +
-                        attributeExpressionExecutors[1].getClass().getName() + "'.");
-            }
-            if (attributeCount == attributesLength - 3) {
-                this.expressionExecutors.addAll(
-                        Arrays.asList(attributeExpressionExecutors).subList(2, attributesLength - 1));
-            } else {
-                throw new SiddhiAppValidationException("The parameter 'query' in rdbms query " +
-                        "function contains '" + attributeCount + "' ordinals, but found siddhi attributes of count '" +
-                        (attributesLength - 3) + "'.");
-            }
-            streamDefExecutor = attributeExpressionExecutors[attributesLength - 1];
+            throw new SiddhiAppValidationException("The last parameter should be a String or a Boolean. But found'" +
+                    attributeExpressionExecutors[1].getReturnType() + "'.");
         }
 
         if (streamDefExecutor instanceof ConstantExpressionExecutor) {
@@ -255,9 +304,17 @@ public class QueryStreamProcessor extends StreamProcessor {
                     }
                 }
                 resultSet = stmt.executeQuery();
+                boolean eventsSent = false;
                 while (resultSet.next()) {
                     StreamEvent clonedEvent = streamEventCloner.copyStreamEvent(event);
                     Object[] data = RDBMSStreamProcessorUtil.processRecord(this.attributeList, resultSet);
+                    complexEventPopulater.populateComplexEvent(clonedEvent, data);
+                    streamEventChunk.insertBeforeCurrent(clonedEvent);
+                    eventsSent = true;
+                }
+                if (ackEmptyResultSet && !eventsSent) {
+                    StreamEvent clonedEvent = streamEventCloner.copyStreamEvent(event);
+                    Object[] data = RDBMSStreamProcessorUtil.processNullRecord(this.attributeList);
                     complexEventPopulater.populateComplexEvent(clonedEvent, data);
                     streamEventChunk.insertBeforeCurrent(clonedEvent);
                 }
